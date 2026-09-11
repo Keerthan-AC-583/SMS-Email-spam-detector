@@ -1,60 +1,182 @@
 import streamlit as st
 import pickle
 import string
-from nltk.corpus import stopwords
 import nltk
+
+from nltk.corpus import stopwords
 from nltk.stem import PorterStemmer
+
+
+# ---------------- NLTK ----------------
+nltk.download('punkt', quiet=True)
+nltk.download('punkt_tab', quiet=True)
+nltk.download('stopwords', quiet=True)
 
 ps = PorterStemmer()
 
 
+# ---------------- Page Configuration ----------------
+st.set_page_config(
+    page_title="SMS Spam Classifier",
+    page_icon="📱",
+    layout="centered"
+)
+
+
+# ---------------- Simple CSS ----------------
+st.markdown("""
+<style>
+
+    .stApp {
+        background-color: #f5f7fb;
+    }
+
+    .title {
+        text-align: center;
+        font-size: 40px;
+        font-weight: bold;
+        color: #222222;
+    }
+
+    .subtitle {
+        text-align: center;
+        color: #666666;
+        margin-bottom: 30px;
+    }
+
+    .result {
+        padding: 20px;
+        border-radius: 10px;
+        text-align: center;
+        font-size: 25px;
+        font-weight: bold;
+        margin-top: 20px;
+    }
+
+    .spam {
+        background-color: #ffe5e5;
+        color: #d00000;
+    }
+
+    .safe {
+        background-color: #e5f8e9;
+        color: #16803c;
+    }
+
+</style>
+""", unsafe_allow_html=True)
+
+
+# ---------------- Load Model ----------------
+@st.cache_resource
+def load_model():
+
+    with open("tfidf.pkl", "rb") as file:
+        tfidf = pickle.load(file)
+
+    with open("model.pkl", "rb") as file:
+        model = pickle.load(file)
+
+    return tfidf, model
+
+
+tfidf, model = load_model()
+
+
+# ---------------- Text Preprocessing ----------------
 def transform_text(text):
+
     text = text.lower()
 
-    text = nltk.word_tokenize(text)
+    tokens = nltk.word_tokenize(text)
 
-    y = []
-    for i in text:
-        if i.isalnum():
-            y.append(i)
+    # Remove special characters
+    tokens = [
+        word for word in tokens
+        if word.isalnum()
+    ]
 
-    text = y[:]
-    y.clear()
+    # Remove stopwords
+    stop_words = set(stopwords.words("english"))
 
-    for i in text:
-        if i not in stopwords.words('english') and i not in string.punctuation:
-            y.append(i)
+    tokens = [
+        word for word in tokens
+        if word not in stop_words
+    ]
 
-    text = y[:]
-    y.clear()
+    # Stemming
+    tokens = [
+        ps.stem(word)
+        for word in tokens
+    ]
 
-    for i in text:
-        y.append(ps.stem(i))
-
-    return " ".join(y)
-
-
-tfidf = pickle.load(open('tfidf.pkl', 'rb'))
-model = pickle.load(open('model.pkl', 'rb'))
+    return " ".join(tokens)
 
 
-st.title("Email/SMS Spam Classifier")
+# ---------------- Website ----------------
 
-input_sms = st.text_area("Enter the message")
+st.markdown(
+    '<div class="title">📱 SMS Spam Classifier</div>',
+    unsafe_allow_html=True
+)
 
-if st.button("Predict"):
+st.markdown(
+    '<div class="subtitle">'
+    'Enter a message to check whether it is Spam or Not Spam'
+    '</div>',
+    unsafe_allow_html=True
+)
 
-    # 1. Preprocessing
-    transform_sms = transform_text(input_sms)
 
-    # 2. Vectorization
-    vector_input = tfidf.transform([transform_sms])
+# Message input
+message = st.text_area(
+    "Enter your message",
+    height=150,
+    placeholder="Example: Congratulations! You have won a prize..."
+)
 
-    # 3. Prediction
-    result = model.predict(vector_input)[0]
 
-    # 4. Display
-    if result == 1:
-        st.header("Spam Detected")
+# Predict button
+if st.button("🔍 Predict", use_container_width=True):
+
+    if message.strip() == "":
+        st.warning("Please enter a message.")
+
     else:
-        st.header("Not Spam Detected")
+
+        # Preprocess
+        transformed_message = transform_text(message)
+
+        # TF-IDF
+        vector = tfidf.transform([transformed_message])
+
+        # Prediction
+        result = model.predict(vector)[0]
+
+        # Display result
+        if result == 1 or result == "spam":
+
+            st.markdown(
+                '<div class="result spam">'
+                '🚨 Spam Detected'
+                '</div>',
+                unsafe_allow_html=True
+            )
+
+        else:
+
+            st.markdown(
+                '<div class="result safe">'
+                '✅ Not Spam'
+                '</div>',
+                unsafe_allow_html=True
+            )
+
+
+# ---------------- Footer ----------------
+
+st.markdown("---")
+
+st.caption(
+    "Built using Python • NLP • TF-IDF • Machine Learning • Streamlit"
+)
